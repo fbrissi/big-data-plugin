@@ -108,7 +108,7 @@ public class ParquetOutputDialog extends BaseParquetStepDialog<ParquetOutputMeta
     ParquetSpec.DataType.DECIMAL.getName(),
     ParquetSpec.DataType.DATE.getName(),
     ParquetSpec.DataType.TIMESTAMP_MILLIS.getName(),
-    ParquetSpec.DataType.BYTE_ARRAY.getName()
+    ParquetSpec.DataType.BINARY.getName()
   };
 
 

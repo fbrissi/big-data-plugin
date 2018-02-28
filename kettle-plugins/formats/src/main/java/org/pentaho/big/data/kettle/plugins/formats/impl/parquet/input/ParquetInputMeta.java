@@ -41,6 +41,7 @@ import org.pentaho.di.trans.TransMeta;
 import org.pentaho.di.trans.step.StepDataInterface;
 import org.pentaho.di.trans.step.StepInterface;
 import org.pentaho.di.trans.step.StepMeta;
+import org.pentaho.hadoop.shim.api.format.IParquetInputField;
 import org.pentaho.metastore.api.IMetaStore;
 
 @Step( id = "ParquetInput", image = "PI.svg", name = "ParquetInput.Name", description = "ParquetInput.Description",
@@ -90,11 +91,11 @@ public class ParquetInputMeta extends ParquetInputMetaBase {
                          VariableSpace space, Repository repository, IMetaStore metaStore ) throws
     KettleStepException {
     try {
-      for ( int i = 0; i < inputFields.length; i++ ) {
-        FormatInputOutputField field = inputFields[ i ];
-        String value = space.environmentSubstitute( field.getName() );
+      for ( int i = 0; i < inputFields.size(); i++ ) {
+        IParquetInputField field = inputFields.get( i );
+        String value = space.environmentSubstitute( field.getPentahoFieldName() );
         ValueMetaInterface v = ValueMetaFactory.createValueMeta( value,
-          field.getType() );
+          field.getPentahoType() );
         v.setOrigin( origin );
         rowMeta.addValueMeta( v );
       }

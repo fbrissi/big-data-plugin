@@ -26,6 +26,7 @@ import org.apache.commons.vfs2.FileObject;
 import org.pentaho.big.data.api.cluster.NamedCluster;
 import org.pentaho.big.data.api.cluster.service.locator.NamedClusterServiceLocator;
 import org.pentaho.big.data.kettle.plugins.formats.FormatInputOutputField;
+import org.pentaho.big.data.kettle.plugins.formats.parquet.input.ParquetInputField;
 import org.pentaho.big.data.kettle.plugins.formats.parquet.input.ParquetInputMetaBase;
 import org.pentaho.bigdata.api.format.FormatService;
 import org.pentaho.di.core.RowMetaAndData;
@@ -39,11 +40,15 @@ import org.pentaho.di.trans.step.StepMeta;
 import org.pentaho.di.trans.step.StepMetaInterface;
 import org.pentaho.di.trans.steps.file.BaseFileInputStep;
 import org.pentaho.di.trans.steps.file.IBaseFileInputReader;
+import org.pentaho.hadoop.shim.api.format.IOrcInputField;
+import org.pentaho.hadoop.shim.api.format.IParquetInputField;
 import org.pentaho.hadoop.shim.api.format.IPentahoInputFormat.IPentahoInputSplit;
 import org.pentaho.hadoop.shim.api.format.IPentahoParquetInputFormat;
 import org.pentaho.hadoop.shim.api.format.SchemaDescription;
 
 import java.nio.file.NoSuchFileException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ParquetInput extends BaseFileInputStep<ParquetInputMeta, ParquetInputData> {
   public static long SPLIT_SIZE = 128 * 1024 * 1024;
@@ -100,10 +105,9 @@ public class ParquetInput extends BaseFileInputStep<ParquetInputMeta, ParquetInp
     if ( meta.inputFiles == null || meta.inputFiles.fileName == null || meta.inputFiles.fileName.length == 0 ) {
       throw new KettleException( "No input files defined" );
     }
-    SchemaDescription schema = createSchemaFromMeta( meta );
 
     data.input = formatService.createInputFormat( IPentahoParquetInputFormat.class );
-    data.input.setSchema( schema );
+    data.input.setSchema( createSchemaFromMeta( meta ) );
 
     String inputFileName = environmentSubstitute( meta.inputFiles.fileName[ 0 ] );
     FileObject inputFileObject = KettleVFS.getFileObject( inputFileName, getTransMeta() );
@@ -137,8 +141,8 @@ public class ParquetInput extends BaseFileInputStep<ParquetInputMeta, ParquetInp
     return null;
   }
 
-  public static SchemaDescription retrieveSchema( NamedClusterServiceLocator namedClusterServiceLocator,
-      NamedCluster namedCluster, String path ) throws Exception {
+  public static List<? extends IParquetInputField> retrieveSchema( NamedClusterServiceLocator namedClusterServiceLocator,
+                                                                   NamedCluster namedCluster, String path ) throws Exception {
     FormatService formatService = namedClusterServiceLocator.getService( namedCluster, FormatService.class );
     IPentahoParquetInputFormat in = formatService.createInputFormat( IPentahoParquetInputFormat.class );
     FileObject inputFileObject = KettleVFS.getFileObject( path );
@@ -148,13 +152,9 @@ public class ParquetInput extends BaseFileInputStep<ParquetInputMeta, ParquetInp
     return in.readSchema( path );
   }
 
-  public static SchemaDescription createSchemaFromMeta( ParquetInputMetaBase meta ) {
-    SchemaDescription schema = new SchemaDescription();
-    for ( FormatInputOutputField f : meta.inputFields ) {
-      SchemaDescription.Field field =
-          schema.new Field( f.getPath(), f.getName(), f.getType(), true );
-      schema.addField( field );
-    }
-    return schema;
+  public static List<IParquetInputField> createSchemaFromMeta( ParquetInputMetaBase meta ) {
+    List<IParquetInputField> fields = new ArrayList<>(  );
+    meta.getInputFields().forEach( f -> fields.add( f ) );
+    return fields;
   }
 }

@@ -40,6 +40,7 @@ import org.eclipse.swt.widgets.TableItem;
 import org.pentaho.big.data.api.initializer.ClusterInitializationException;
 import org.pentaho.big.data.kettle.plugins.formats.FormatInputOutputField;
 import org.pentaho.big.data.kettle.plugins.formats.impl.parquet.BaseParquetStepDialog;
+import org.pentaho.big.data.kettle.plugins.formats.parquet.input.ParquetInputField;
 import org.pentaho.big.data.kettle.plugins.formats.parquet.input.ParquetInputMetaBase;
 import org.pentaho.di.core.Const;
 import org.pentaho.di.core.row.value.ValueMetaFactory;
@@ -56,6 +57,7 @@ import org.pentaho.di.ui.core.widget.ColumnInfo;
 import org.pentaho.di.ui.core.widget.ColumnsResizer;
 import org.pentaho.di.ui.core.widget.TableView;
 import org.pentaho.di.ui.trans.dialog.TransPreviewProgressDialog;
+import org.pentaho.hadoop.shim.api.format.IParquetInputField;
 import org.pentaho.hadoop.shim.api.format.SchemaDescription;
 
 public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> {
@@ -101,8 +103,8 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
     wlFields.setText( BaseMessages.getString( PKG, "ParquetInputDialog.Fields.Label" ) );
     props.setLook( wlFields );
     new FD( wlFields ).left( 0, 0 ).top( 0, FIELDS_SEP ).apply();
-    FormatInputOutputField[] fields = meta.inputFields;
-    int nrRows = fields == null ? 0 : fields.length;
+    List<ParquetInputField> fields = meta.getInputFields();
+    int nrRows = fields == null ? 0 : fields.size();
     ColumnInfo[] parameterColumns = new ColumnInfo[] {
       new ColumnInfo( BaseMessages.getString( PKG, "ParquetInputDialog.Fields.column.AvroPath" ),
           ColumnInfo.COLUMN_TYPE_TEXT, false, false ),
@@ -137,7 +139,7 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
     if ( meta.inputFiles.fileName.length > 0 ) {
       wPath.setText( meta.inputFiles.fileName[0] );
     }
-    int nrFields = meta.inputFields.length;
+    int nrFields = meta.getInputFields().size();
     for ( int i = 0; i < nrFields; i++ ) {
       TableItem item = null;
       if ( i < wInputFields.table.getItemCount() ) {
@@ -146,19 +148,19 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
         item = new TableItem( wInputFields.table, SWT.NONE );
       }
 
-      FormatInputOutputField inputField = meta.inputFields[i];
-      if ( inputField.getPath() != null ) {
-        item.setText( PARQUET_PATH_COLUMN_INDEX, inputField.getPath() );
+      ParquetInputField inputField = meta.getInputFields().get( i );
+      if ( inputField.getFormatFieldName() != null ) {
+        item.setText( PARQUET_PATH_COLUMN_INDEX, inputField.getFormatFieldName() );
       }
-      if ( inputField.getName() != null ) {
-        item.setText( FIELD_NAME_COLUMN_INDEX, inputField.getName() );
+      if ( inputField.getPentahoFieldName() != null ) {
+        item.setText( FIELD_NAME_COLUMN_INDEX, inputField.getPentahoFieldName() );
       }
       item.setText( FIELD_TYPE_COLUMN_INDEX, inputField.getTypeDesc() );
     }
   }
 
   protected void getFields() throws Exception {
-    SchemaDescription schema =
+    List<? extends IParquetInputField> schema =
         ParquetInput.retrieveSchema( meta.namedClusterServiceLocator, meta.getNamedCluster(), wPath.getText().trim() );
 
     if ( schema.isEmpty() ) {
@@ -166,7 +168,7 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
     }
     Set<String> existKeys = new TreeSet<>();
     if ( wInputFields.table.getItemCount() > 0 ) {
-      MessageDialog dialog = getFieldsChoiceDialog( shell, schema.getFieldsCount() );
+      MessageDialog dialog = getFieldsChoiceDialog( shell, schema.size() );
       int idx = dialog.open();
       int choice = idx & 0xFF;
       switch ( choice ) {
@@ -187,15 +189,15 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
           break;
       }
     }
-    for ( SchemaDescription.Field f : schema ) {
-      if ( existKeys.contains( f.formatFieldName ) ) {
+    for ( IParquetInputField f : schema ) {
+      if ( existKeys.contains( f.getFormatFieldName() ) ) {
         continue;
       }
       TableItem item = new TableItem( wInputFields.table, SWT.NONE );
 
-      item.setText( PARQUET_PATH_COLUMN_INDEX, f.formatFieldName );
-      item.setText( FIELD_NAME_COLUMN_INDEX, f.formatFieldName );
-      item.setText( FIELD_TYPE_COLUMN_INDEX, ValueMetaFactory.getValueMetaName( f.pentahoValueMetaType ) );
+      item.setText( PARQUET_PATH_COLUMN_INDEX, f.getFormatFieldName() );
+      item.setText( FIELD_NAME_COLUMN_INDEX, f.getPentahoFieldName() );
+      item.setText( FIELD_TYPE_COLUMN_INDEX, ValueMetaFactory.getValueMetaName( f.getParquetType().getPdiType() ) );
     }
 
     meta.setChanged();
@@ -212,14 +214,14 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
       meta.inputFiles.fileName[0] = wPath.getText().trim();
     }
     int nrFields = wInputFields.nrNonEmpty();
-    meta.inputFields = new FormatInputOutputField[nrFields];
+    meta.setInputFields( new ArrayList<>(  )  );
     for ( int i = 0; i < nrFields; i++ ) {
       TableItem item = wInputFields.getNonEmpty( i );
-      FormatInputOutputField field = new FormatInputOutputField();
-      field.setPath( item.getText( PARQUET_PATH_COLUMN_INDEX ) );
-      field.setName( item.getText( FIELD_NAME_COLUMN_INDEX ) );
-      field.setType( ValueMetaFactory.getIdForValueMeta( item.getText( FIELD_TYPE_COLUMN_INDEX ) ) );
-      meta.inputFields[i] = field;
+      ParquetInputField field = new ParquetInputField();
+      field.setFormatFieldName( item.getText( PARQUET_PATH_COLUMN_INDEX ) );
+      field.setPentahoFieldName( item.getText( FIELD_NAME_COLUMN_INDEX ) );
+      field.setPentahoType( ValueMetaFactory.getIdForValueMeta( item.getText( FIELD_TYPE_COLUMN_INDEX ) ) );
+      meta.getInputFields().add( field );
     }
   }
 
@@ -248,18 +250,17 @@ public class ParquetInputDialog extends BaseParquetStepDialog<ParquetInputMeta> 
       oneMeta.inputFiles.fileName[0] = wPath.getText().trim();
 
       try {
-        SchemaDescription schema =
+        List<? extends IParquetInputField> schema =
             ParquetInput.retrieveSchema( meta.namedClusterServiceLocator, meta.getNamedCluster(),
               oneMeta.inputFiles.fileName[0] );
-        List<FormatInputOutputField> fields = new ArrayList<>();
-        for ( SchemaDescription.Field f : schema ) {
-          FormatInputOutputField fo = new FormatInputOutputField();
-          fo.setPath( f.formatFieldName );
-          fo.setName( f.formatFieldName );
-          fo.setType( f.pentahoValueMetaType );
-          fields.add( fo );
+        meta.setInputFields( new ArrayList<>(  ) );
+        for ( IParquetInputField f : schema ) {
+          ParquetInputField fo = new ParquetInputField();
+          fo.setFormatFieldName( f.getFormatFieldName() );
+          fo.setFormatFieldName( f.getFormatFieldName() );
+          fo.setPentahoType( f.getPentahoType() );
+          meta.getInputFields().add( fo );
         }
-        oneMeta.inputFields = fields.toArray( new FormatInputOutputField[0] );
       } catch ( Exception ex ) {
         throw new RuntimeException( ex );
       }
